@@ -1,137 +1,121 @@
 <?php
-include 'includes/header.php'; // Menyertakan header
-include 'includes/navbar.php'; // Menyertakan navbar
+include_once 'includes/header.php'; // Menyertakan header
+ // Menyertakan navbar
+
 // Path ke file CSV
 $file = 'data/buku2.csv';
 $tempFile = 'data/temp_buku.csv'; // File sementara untuk menyimpan data yang tidak terhapus
 
-// Menangani form submit untuk menambah buku
-if (isset($_POST['submit'])) {
-    // Mengambil data dari form
-    $judul = $_POST['judul'];
-    $klasifikasi = $_POST['klasifikasi'];
-    $nama_klasifikasi = $_POST['nama_klasifikasi'];
-
-    // Membaca data yang sudah ada di file CSV
-    $handle = fopen($file, 'a'); // Membuka file untuk ditulis
-    if ($handle !== false) {
-        // Membuat kode buku otomatis berdasarkan data yang ada
-        $kode_buku = generateKodeBuku($file);
-
-        // Menyimpan data buku baru ke dalam file CSV
-        fputcsv($handle, [$judul, $klasifikasi, $nama_klasifikasi, $kode_buku]);
-        fclose($handle);
-
-        echo '<script>alert("Buku berhasil ditambahkan!"); window.location.href = "add.php";</script>';
-    } else {
-        echo "Gagal menulis ke file.";
-    }
-}
-
 // Fungsi untuk menghasilkan kode buku secara otomatis
 function generateKodeBuku($file)
 {
-    // Membaca file CSV untuk mendapatkan kode buku terakhir
-    $handle = fopen($file, 'r');
-    $lastKodeBuku = '';
-    while (($data = fgetcsv($handle)) !== false) {
-        $lastKodeBuku = $data[3]; // Mengambil kode buku terakhir
-    }
-    fclose($handle);
-
-    // Menambahkan angka ke kode buku terakhir (misalnya: B001, B002, ...)
     $prefix = 'KBB-';
-    $number = (int)substr($lastKodeBuku, 1); // Mengambil angka setelah prefix 'B'
-    $number++;
+    $number = 1;
+
+    if (file_exists($file) && ($handle = fopen($file, 'r'))) {
+        $lastKodeBuku = '';
+        while (($data = fgetcsv($handle)) !== false) {
+            $lastKodeBuku = $data[3]; // Kode buku ada di kolom ke-4
+        }
+        fclose($handle);
+
+        if (!empty($lastKodeBuku)) {
+            $number = (int)substr($lastKodeBuku, strlen($prefix)) + 1;
+        }
+    }
 
     return $prefix . str_pad($number, 3, '0', STR_PAD_LEFT);
+}
+
+// Menangani form submit untuk menambah buku
+if (isset($_POST['submit'])) {
+    $judul = trim($_POST['judul']);
+    $klasifikasi = trim($_POST['klasifikasi']);
+    $nama_klasifikasi = trim($_POST['nama_klasifikasi']);
+
+    if ($judul && $klasifikasi && $nama_klasifikasi) {
+        $kode_buku = generateKodeBuku($file);
+
+        if ($handle = fopen($file, 'a')) {
+            fputcsv($handle, [$judul, $klasifikasi, $nama_klasifikasi, $kode_buku]);
+            fclose($handle);
+
+            echo '<script>alert("Buku berhasil ditambahkan!"); window.location.href = "add.php";</script>';
+        } else {
+            echo '<script>alert("Gagal menulis ke file!");</script>';
+        }
+    } else {
+        echo '<script>alert("Semua kolom harus diisi!");</script>';
+    }
 }
 
 // Menangani penghapusan berdasarkan kode buku
 if (isset($_GET['delete'])) {
     $kodeBuku = $_GET['delete'];
 
-    // Membuka file CSV dan file sementara
-    $handle = fopen($file, 'r');
-    $tempHandle = fopen($tempFile, 'w');
-
-    if ($handle && $tempHandle) {
-        // Membaca dan menyalin baris-baris ke file sementara, kecuali baris dengan kode buku yang ingin dihapus
+    if (file_exists($file) && ($handle = fopen($file, 'r')) && ($tempHandle = fopen($tempFile, 'w'))) {
         while (($data = fgetcsv($handle)) !== false) {
             if ($data[3] !== $kodeBuku) { // Jika kode buku tidak cocok, simpan baris ke file sementara
                 fputcsv($tempHandle, $data);
             }
         }
-
         fclose($handle);
         fclose($tempHandle);
-
-        // Mengganti file asli dengan file sementara (menghapus buku yang tidak terpilih)
         rename($tempFile, $file);
 
         echo '<script>alert("Buku berhasil dihapus!"); window.location.href = "add.php";</script>';
     } else {
-        echo "Gagal membuka file.";
+        echo '<script>alert("Gagal membuka file!");</script>';
     }
 }
 
 // Menangani pencarian buku berdasarkan judul
 $results = [];
-if (isset($_GET['keyword'])) {
-    $keyword = $_GET['keyword'];
-    // Membaca file CSV dan mencari data
-    $handle = fopen($file, 'r');
-    $header = fgetcsv($handle); // Membaca header (baris pertama)
+if (isset($_GET['keyword']) && !empty(trim($_GET['keyword']))) {
+    $keyword = trim($_GET['keyword']);
 
-    // Proses baris data berikutnya
-    while (($data = fgetcsv($handle)) !== false) {
-        $judul = $data[0]; // Judul buku ada di kolom pertama
-
-        // Memeriksa apakah keyword ada dalam judul buku (case-insensitive)
-        if (strpos(strtolower($judul), strtolower($keyword)) !== false) {
-            $results[] = [
-                'judul' => $data[0],
-                'klasifikasi' => $data[1],
-                'nama_klasifikasi' => $data[2],
-                'kode_buku' => $data[3]
-            ];
+    if ($handle = fopen($file, 'r')) {
+        fgetcsv($handle); // Lewati header
+        while (($data = fgetcsv($handle)) !== false) {
+            if (stripos($data[0], $keyword) !== false) {
+                $results[] = $data;
+            }
         }
+        fclose($handle);
     }
-    fclose($handle);
 }
-
 ?>
-
 <!DOCTYPE html>
 <html lang="id">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Kelola Koleksi Buku</title>
-    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-        #searchBar {
-            margin-bottom: 20px;
-        }
-    </style>
+    <!-- Tambahkan Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
 <body>
+    <!-- Tambahkan container-fluid agar navbar responsif -->
+    <div class="container-fluid">
+        <?php include 'includes/navbar.php'; ?>
+    </div>
+
     <div class="container mt-4">
-        <h1>Kelola Koleksi Buku</h1>
+        <h1 class="mb-4">Kelola Koleksi Buku</h1>
 
         <!-- Form untuk menambah buku -->
         <h3>Tambah Buku Baru</h3>
-        <form action="add.php" method="POST">
-            <div class="form-group">
-                <label for="judul">Judul Buku:</label>
+        <form action="add.php" method="POST" class="mb-4">
+            <div class="mb-3">
+                <label for="judul" class="form-label">Judul Buku:</label>
                 <input type="text" class="form-control" id="judul" name="judul" required>
             </div>
-            <div class="form-group">
-                <label for="klasifikasi">Klasifikasi:</label>
+            <div class="mb-3">
+                <label for="klasifikasi" class="form-label">Klasifikasi:</label>
                 <input type="text" class="form-control" id="klasifikasi" name="klasifikasi" required>
             </div>
-            <div class="form-group">
-                <label for="nama_klasifikasi">Nama Klasifikasi:</label>
+            <div class="mb-3">
+                <label for="nama_klasifikasi" class="form-label">Nama Klasifikasi:</label>
                 <input type="text" class="form-control" id="nama_klasifikasi" name="nama_klasifikasi" required>
             </div>
             <button type="submit" class="btn btn-primary" name="submit">Tambah Buku</button>
@@ -139,49 +123,41 @@ if (isset($_GET['keyword'])) {
 
         <!-- Pencarian Buku -->
         <h3 class="mt-5">Cari Buku Berdasarkan Judul</h3>
-        <form action="add.php" method="GET">
-            <div class="form-group">
-                <input type="text" class="form-control" id="searchBar" name="keyword" placeholder="Cari berdasarkan judul buku">
+        <form action="add.php" method="GET" class="mb-4">
+            <div class="input-group">
+                <input type="text" class="form-control" name="keyword" placeholder="Cari berdasarkan judul buku">
+                <button type="submit" class="btn btn-primary">Cari</button>
             </div>
-            <button type="submit" class="btn btn-primary">Cari</button>
         </form>
 
         <!-- Tabel Koleksi Buku -->
         <h3 class="mt-5">Daftar Koleksi Buku</h3>
-        <table class="table table-striped">
-            <thead>
-                <tr>
-                    <th>Judul Buku</th>
-                    <th>Klasifikasi</th>
-                    <th>Nama Klasifikasi</th>
-                    <th>Kode Buku</th>
-                    <th>Opsi</th>
-                </tr>
-            </thead>
-            <tbody>
-                <!-- Menampilkan hasil pencarian jika ada -->
+        <div class="table-responsive">
+            <table class="table table-striped table-bordered">
+                <tbody>
                 <?php if (!empty($results)): ?>
-                    <?php foreach ($results as $book): ?>
+                    <?php foreach ($results as $data): ?>
                         <tr>
-                            <td><?= $book['judul'] ?></td>
-                            <td><?= $book['klasifikasi'] ?></td>
-                            <td><?= $book['nama_klasifikasi'] ?></td>
-                            <td><?= $book['kode_buku'] ?></td>
-                            <td><a href="add.php?delete=<?= $book['kode_buku'] ?>" class="btn btn-danger">Hapus</a></td>
+                            <td><?= htmlspecialchars($data[0]) ?></td>
+                            <td><?= htmlspecialchars($data[1]) ?></td>
+                            <td><?= htmlspecialchars($data[2]) ?></td>
+                            <td><?= htmlspecialchars($data[3]) ?></td>
+                            <td>
+                                <a href="add.php?delete=<?= urlencode($data[3]) ?>" class="btn btn-danger btn-sm">Hapus</a>
+                            </td>
                         </tr>
                     <?php endforeach; ?>
                 <?php else: ?>
                     <tr>
-                        <td colspan="5">Tidak ada buku yang ditemukan.</td>
+                        <td colspan="5" class="text-center">Tidak ada buku yang ditemukan.</td>
                     </tr>
                 <?php endif; ?>
-            </tbody>
-        </table>
+                </tbody>
+            </table>
+        </div>
     </div>
 
-    <!-- Bootstrap JS & Popper.js -->
-    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.3/dist/umd/popper.min.js"></script>
-    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+    <!-- Tambahkan Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

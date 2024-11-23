@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Data Peminjaman</title>
+    <title><?php echo isset($title) ? $title : 'Default Title'; ?></title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -15,20 +15,25 @@
             color: white;
             padding: 10px;
             display: flex;
-            justify-content: flex-start; /* Navbar berada di kiri */
+            justify-content: flex-start;
             align-items: center;
-            padding-left: 20px; /* Memberikan jarak sedikit dari kiri */
+            padding-left: 20px;
         }
         nav a {
             color: white;
-            margin: 0 10px; /* Mengurangi margin antar link */
+            margin: 0 10px;
             text-decoration: none;
             display: inline-block;
-            padding: 8px 16px; /* Memberi sedikit padding untuk elemen */
+            padding: 8px 16px;
         }
         nav a:hover {
             text-decoration: underline;
-            background-color: #444; /* Efek hover dengan latar belakang sedikit gelap */
+            background-color: #444;
+        }
+        nav a.active {
+            background-color: #e91e63; /* Warna khusus untuk halaman aktif */
+            color: white;
+            font-weight: bold; /* Penekanan pada halaman aktif */
         }
         .container {
             padding: 20px;
@@ -50,5 +55,4 @@
         }
     </style>
 </head>
-
-</html>
+<body>
