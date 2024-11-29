@@ -1,24 +1,18 @@
 <?php
 include_once 'includes/header.php'; // Menyertakan header
- // Menyertakan navbar
-
-// Path ke file CSV
-$file = 'data/buku2.csv';
-$tempFile = 'data/temp_buku.csv'; // File sementara untuk menyimpan data yang tidak terhapus
+include_once 'includes/config.php'; // Menyertakan konfigurasi database
 
 // Fungsi untuk menghasilkan kode buku secara otomatis
-function generateKodeBuku($file)
+function generateKodeBuku($pdo)
 {
     $prefix = 'KBB-';
     $number = 1;
 
-    if (file_exists($file) && ($handle = fopen($file, 'r'))) {
-        $lastKodeBuku = '';
-        while (($data = fgetcsv($handle)) !== false) {
-            $lastKodeBuku = $data[3]; // Kode buku ada di kolom ke-4
-        }
-        fclose($handle);
-
+    // Query untuk mendapatkan kode buku terakhir
+    $stmt = $pdo->query("SELECT kode_buku FROM buku ORDER BY kode_buku DESC LIMIT 1");
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    if ($row) {
+        $lastKodeBuku = $row['kode_buku'];
         if (!empty($lastKodeBuku)) {
             $number = (int)substr($lastKodeBuku, strlen($prefix)) + 1;
         }
@@ -34,15 +28,16 @@ if (isset($_POST['submit'])) {
     $nama_klasifikasi = trim($_POST['nama_klasifikasi']);
 
     if ($judul && $klasifikasi && $nama_klasifikasi) {
-        $kode_buku = generateKodeBuku($file);
+        $kode_buku = generateKodeBuku($pdo);
 
-        if ($handle = fopen($file, 'a')) {
-            fputcsv($handle, [$judul, $klasifikasi, $nama_klasifikasi, $kode_buku]);
-            fclose($handle);
+        // Insert buku ke database
+        $stmt = $pdo->prepare("INSERT INTO buku (judul, klasifikasi, nama_klasifikasi, kode_buku) VALUES (?, ?, ?, ?)");
+        $stmt->execute([$judul, $klasifikasi, $nama_klasifikasi, $kode_buku]);
 
+        if ($stmt) {
             echo '<script>alert("Buku berhasil ditambahkan!"); window.location.href = "add.php";</script>';
         } else {
-            echo '<script>alert("Gagal menulis ke file!");</script>';
+            echo '<script>alert("Gagal menambahkan buku!");</script>';
         }
     } else {
         echo '<script>alert("Semua kolom harus diisi!");</script>';
@@ -53,19 +48,14 @@ if (isset($_POST['submit'])) {
 if (isset($_GET['delete'])) {
     $kodeBuku = $_GET['delete'];
 
-    if (file_exists($file) && ($handle = fopen($file, 'r')) && ($tempHandle = fopen($tempFile, 'w'))) {
-        while (($data = fgetcsv($handle)) !== false) {
-            if ($data[3] !== $kodeBuku) { // Jika kode buku tidak cocok, simpan baris ke file sementara
-                fputcsv($tempHandle, $data);
-            }
-        }
-        fclose($handle);
-        fclose($tempHandle);
-        rename($tempFile, $file);
+    // Hapus buku dari database
+    $stmt = $pdo->prepare("DELETE FROM buku WHERE kode_buku = ?");
+    $stmt->execute([$kodeBuku]);
 
+    if ($stmt) {
         echo '<script>alert("Buku berhasil dihapus!"); window.location.href = "add.php";</script>';
     } else {
-        echo '<script>alert("Gagal membuka file!");</script>';
+        echo '<script>alert("Gagal menghapus buku!");</script>';
     }
 }
 
@@ -74,15 +64,10 @@ $results = [];
 if (isset($_GET['keyword']) && !empty(trim($_GET['keyword']))) {
     $keyword = trim($_GET['keyword']);
 
-    if ($handle = fopen($file, 'r')) {
-        fgetcsv($handle); // Lewati header
-        while (($data = fgetcsv($handle)) !== false) {
-            if (stripos($data[0], $keyword) !== false) {
-                $results[] = $data;
-            }
-        }
-        fclose($handle);
-    }
+    $stmt = $pdo->prepare("SELECT * FROM buku WHERE judul LIKE ?");
+    $searchTerm = "%" . $keyword . "%";
+    $stmt->execute([$searchTerm]);
+    $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 ?>
 <!DOCTYPE html>
@@ -138,12 +123,12 @@ if (isset($_GET['keyword']) && !empty(trim($_GET['keyword']))) {
                 <?php if (!empty($results)): ?>
                     <?php foreach ($results as $data): ?>
                         <tr>
-                            <td><?= htmlspecialchars($data[0]) ?></td>
-                            <td><?= htmlspecialchars($data[1]) ?></td>
-                            <td><?= htmlspecialchars($data[2]) ?></td>
-                            <td><?= htmlspecialchars($data[3]) ?></td>
+                            <td><?= htmlspecialchars($data['judul']) ?></td>
+                            <td><?= htmlspecialchars($data['klasifikasi']) ?></td>
+                            <td><?= htmlspecialchars($data['nama_klasifikasi']) ?></td>
+                            <td><?= htmlspecialchars($data['kode_buku']) ?></td>
                             <td>
-                                <a href="add.php?delete=<?= urlencode($data[3]) ?>" class="btn btn-danger btn-sm">Hapus</a>
+                                <a href="add.php?delete=<?= urlencode($data['kode_buku']) ?>" class="btn btn-danger btn-sm">Hapus</a>
                             </td>
                         </tr>
                     <?php endforeach; ?>
@@ -161,3 +146,7 @@ if (isset($_GET['keyword']) && !empty(trim($_GET['keyword']))) {
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
+
+<?php
+// Tidak perlu menutup koneksi PDO secara eksplisit, karena PDO menutupnya secara otomatis.
+?>

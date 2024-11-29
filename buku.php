@@ -1,47 +1,44 @@
 <?php
-// Path ke file CSV
-$bukuFile = 'data/buku2.csv';
+// Koneksi ke database
+$servername = "localhost";
+$username = "root";
+$password = "";
+$dbname = "perpustakaan"; // Ganti dengan nama database Anda
+
+$conn = new mysqli($servername, $username, $password, $dbname);
+
+// Cek koneksi
+if ($conn->connect_error) {
+    die("Connection failed: " . $conn->connect_error);
+}
 
 // Inisialisasi data
 $klasifikasiList = []; // Untuk daftar klasifikasi
 $bukuData = []; // Untuk menyimpan data buku
 
-// Cek apakah file CSV ada
-if (file_exists($bukuFile)) {
-    $data = array_map('str_getcsv', file($bukuFile, FILE_SKIP_EMPTY_LINES));
+// Ambil data dari tabel buku
+$sql = "SELECT * FROM buku";
+$result = $conn->query($sql);
 
-    if (!empty($data)) {
-        // Ambil header dan data buku
-        $header = array_map('trim', $data[0]);
-        $rows = array_slice($data, 1);
-
-        // Temukan indeks kolom Klasifikasi
-        $klasifikasiIndex = array_search('nama_klasifikasi', $header);
-        if ($klasifikasiIndex === false) {
-            die("Kolom 'Klasifikasi' tidak ditemukan di file buku.");
-        }
-
-        // Kumpulkan data buku dan daftar klasifikasi unik
-        foreach ($rows as $row) {
-            if (count($row) > $klasifikasiIndex) {
-                $bukuData[] = $row;
-                $klasifikasiList[] = $row[$klasifikasiIndex];
-            }
-        }
-
-        // Hapus duplikat dari daftar klasifikasi
-        $klasifikasiList = array_unique($klasifikasiList);
-        sort($klasifikasiList); // Urutkan alfabetis
+if ($result->num_rows > 0) {
+    // Ambil data dari query dan kumpulkan klasifikasi
+    while($row = $result->fetch_assoc()) {
+        $bukuData[] = $row;
+        $klasifikasiList[] = $row['nama_klasifikasi'];
     }
 } else {
-    die("File buku tidak ditemukan.");
+    echo "0 results";
 }
+
+// Hapus duplikat dari daftar klasifikasi
+$klasifikasiList = array_unique($klasifikasiList);
+sort($klasifikasiList); // Urutkan alfabetis
 
 // Filter berdasarkan klasifikasi jika dipilih
 $filterKlasifikasi = $_GET['klasifikasi'] ?? '';
 if ($filterKlasifikasi !== '') {
-    $bukuData = array_filter($bukuData, function ($row) use ($filterKlasifikasi, $klasifikasiIndex) {
-        return $row[$klasifikasiIndex] === $filterKlasifikasi;
+    $bukuData = array_filter($bukuData, function ($row) use ($filterKlasifikasi) {
+        return $row['nama_klasifikasi'] === $filterKlasifikasi;
     });
 }
 
@@ -65,7 +62,7 @@ include 'includes/navbar.php';
     
     <!-- Konten Utama -->
     <div class="container mt-5">
-        <h1 class="text-center mb-4">Koleksi Buku</h1>
+        <h1 class="text-center mb-4">KOLEKSI BUKU</h1>
 
         <!-- Dropdown Filter -->
         <form method="GET" class="mb-4">
@@ -98,17 +95,22 @@ include 'includes/navbar.php';
                 <table class="table table-striped table-bordered">
                     <thead class="table-dark">
                         <tr>
-                            <?php foreach ($header as $col): ?>
-                                <th><?php echo htmlspecialchars($col); ?></th>
-                            <?php endforeach; ?>
+                            <!-- Header tabel -->
+                            <th>ID</th>
+                            <th>Judul</th>
+                            <th>Klasifikasi</th>
+                            <th>Nama Klasifikasi</th>
+                            <th>Kode Buku</th>
                         </tr>
                     </thead>
                     <tbody>
                         <?php foreach ($bukuData as $row): ?>
                             <tr>
-                                <?php foreach ($row as $col): ?>
-                                    <td><?php echo htmlspecialchars($col); ?></td>
-                                <?php endforeach; ?>
+                                <td><?php echo htmlspecialchars($row['id']); ?></td>
+                                <td><?php echo htmlspecialchars($row['judul']); ?></td>
+                                <td><?php echo htmlspecialchars($row['klasifikasi']); ?></td>
+                                <td><?php echo htmlspecialchars($row['nama_klasifikasi']); ?></td>
+                                <td><?php echo htmlspecialchars($row['kode_buku']); ?></td>
                             </tr>
                         <?php endforeach; ?>
                     </tbody>
@@ -125,3 +127,8 @@ include 'includes/navbar.php';
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
+
+<?php
+// Tutup koneksi database
+$conn->close();
+?>

@@ -1,39 +1,44 @@
 <?php
-// Path ke file CSV
-$file = 'data/anggota.csv';
-include 'includes/header.php'; // Menyertakan header
-include 'includes/navbar.php'; // Menyertakan navbar
+// Konfigurasi database
+$host = 'localhost'; // Ganti dengan host database Anda
+$dbname = 'perpustakaan'; // Nama database Anda
+$username = 'root'; // Ganti dengan username database Anda
+$password = ''; // Ganti dengan password database Anda
+
+// Koneksi ke database
+try {
+    $pdo = new PDO("mysql:host=$host;dbname=$dbname", $username, $password);
+    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+} catch (PDOException $e) {
+    die("Koneksi gagal: " . $e->getMessage());
+}
 
 // Inisialisasi tipe keanggotaan
 $tipeKeanggotaanList = [];
 $filteredData = [];
 $selectedTipe = $_GET['tipe_keanggotaan'] ?? ''; // Tipe keanggotaan yang dipilih dari dropdown
 
-// Cek apakah file CSV ada
-if (file_exists($file)) {
-    if (($handle = fopen($file, 'r')) !== false) {
-        $isHeader = true;
-        while (($data = fgetcsv($handle, 1000, ',')) !== false) {
-            if ($isHeader) {
-                $isHeader = false;
-                continue;
-            }
-
-            $tipe = $data[1]; // Ambil kolom tipe keanggotaan
-            $tipeKeanggotaanList[] = $tipe;
-
-            // Filter data berdasarkan tipe keanggotaan
-            if ($selectedTipe === '' || $tipe === $selectedTipe) {
-                $filteredData[] = $data;
-            }
-        }
-        fclose($handle);
-    }
+// Query untuk mengambil data anggota dan tipe keanggotaan
+$query = "SELECT id_anggota, tipe_keanggotaan FROM anggota";
+if ($selectedTipe !== '') {
+    $query .= " WHERE tipe_keanggotaan = :tipe_keanggotaan";
 }
 
-// Hapus duplikat tipe keanggotaan
-$tipeKeanggotaanList = array_unique($tipeKeanggotaanList);
-sort($tipeKeanggotaanList);
+$stmt = $pdo->prepare($query);
+
+// Jika ada filter tipe keanggotaan, bind parameter
+if ($selectedTipe !== '') {
+    $stmt->bindParam(':tipe_keanggotaan', $selectedTipe, PDO::PARAM_STR);
+}
+
+$stmt->execute();
+$filteredData = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+// Ambil daftar tipe keanggotaan untuk dropdown
+$tipeKeanggotaanListQuery = "SELECT DISTINCT tipe_keanggotaan FROM anggota";
+$stmt = $pdo->prepare($tipeKeanggotaanListQuery);
+$stmt->execute();
+$tipeKeanggotaanList = $stmt->fetchAll(PDO::FETCH_COLUMN);
 ?>
 
 <!DOCTYPE html>
@@ -59,6 +64,9 @@ sort($tipeKeanggotaanList);
     </script>
 </head>
 <body>
+    <?php include 'includes/header.php'; ?> <!-- Menyertakan header -->
+    <?php include 'includes/navbar.php'; ?> <!-- Menyertakan navbar -->
+
     <div class="container mt-5">
         <h1 class="text-center mb-4">Data Keanggotaan</h1>
 
@@ -104,8 +112,8 @@ sort($tipeKeanggotaanList);
                             <?php foreach ($filteredData as $data): ?>
                                 <tr>
                                     <td><?php echo $no++; ?></td>
-                                    <td><?php echo htmlspecialchars($data[0]); ?></td>
-                                    <td><?php echo htmlspecialchars($data[1]); ?></td>
+                                    <td><?php echo htmlspecialchars($data['id_anggota']); ?></td>
+                                    <td><?php echo htmlspecialchars($data['tipe_keanggotaan']); ?></td>
                                 </tr>
                             <?php endforeach; ?>
                         </tbody>
@@ -122,7 +130,7 @@ sort($tipeKeanggotaanList);
             // Hitung jumlah anggota berdasarkan tipe keanggotaan
             $membershipCounts = [];
             foreach ($filteredData as $data) {
-                $tipe = $data[1];
+                $tipe = $data['tipe_keanggotaan'];
                 if (!isset($membershipCounts[$tipe])) {
                     $membershipCounts[$tipe] = 0;
                 }
@@ -186,6 +194,8 @@ sort($tipeKeanggotaanList);
             </script>
         </div>
     </div>
+
+    <?php include 'includes/footer.php'; ?> <!-- Menyertakan footer -->
 
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>

@@ -2,8 +2,19 @@
 include 'includes/header.php'; // Menyertakan header
 include 'includes/navbar.php'; // Menyertakan navbar
 
-// Path ke file CSV
-$file = 'data/peminjaman2.csv';
+// Koneksi ke database
+$servername = "localhost"; // Nama server database (misalnya localhost)
+$username = "root"; // Username untuk login ke database
+$password = ""; // Password untuk login ke database
+$dbname = "perpustakaan"; // Nama database
+
+// Membuat koneksi
+$conn = new mysqli($servername, $username, $password, $dbname);
+
+// Cek koneksi
+if ($conn->connect_error) {
+    die("Koneksi gagal: " . $conn->connect_error);
+}
 
 // Inisialisasi data
 $bulanList = [];
@@ -11,35 +22,35 @@ $filteredData = [];
 $dataPerBulan = [];
 $selectedBulan = $_GET['bulan'] ?? ''; // Filter bulan dari dropdown
 
-// Cek apakah file CSV ada
-if (file_exists($file)) {
-    if (($handle = fopen($file, 'r')) !== false) {
-        $isHeader = true;
-        while (($data = fgetcsv($handle, 1000, ',')) !== false) {
-            if ($isHeader) {
-                $isHeader = false;
-                continue;
-            }
-
-            $tanggalPeminjaman = $data[5]; // Misalnya, kolom ke-6 adalah tanggal pinjam
-            $bulan = date('F', strtotime($tanggalPeminjaman)); // Mengambil nama bulan
-
-            $bulanList[] = $bulan;
-
-            // Hitung data untuk grafik
-            if (!isset($dataPerBulan[$bulan])) {
-                $dataPerBulan[$bulan] = 0;
-            }
-            $dataPerBulan[$bulan]++;
-
-            // Filter data berdasarkan bulan
-            if ($selectedBulan === '' || $bulan === $selectedBulan) {
-                $filteredData[] = $data;
-            }
-        }
-        fclose($handle);
-    }
+// Ambil data dari database
+$sql = "SELECT * FROM peminjaman";
+if ($selectedBulan) {
+    $sql .= " WHERE MONTH(tanggal_pinjam) = MONTH(STR_TO_DATE('$selectedBulan', '%M'))";
 }
+$result = $conn->query($sql);
+
+// Proses data yang diambil dari database
+if ($result->num_rows > 0) {
+    while($data = $result->fetch_assoc()) {
+        $tanggalPeminjaman = $data['tanggal_pinjam']; // Kolom tanggal pinjam
+        $bulan = date('F', strtotime($tanggalPeminjaman)); // Mengambil nama bulan
+
+        $bulanList[] = $bulan;
+
+        // Hitung data untuk grafik
+        if (!isset($dataPerBulan[$bulan])) {
+            $dataPerBulan[$bulan] = 0;
+        }
+        $dataPerBulan[$bulan]++;
+
+        // Filter data berdasarkan bulan
+        $filteredData[] = $data;
+    }
+} else {
+    echo "Tidak ada data ditemukan.";
+}
+
+$conn->close();
 
 // Hapus duplikat bulan
 $bulanList = array_unique($bulanList);
