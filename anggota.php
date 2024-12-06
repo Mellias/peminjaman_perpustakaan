@@ -98,7 +98,7 @@ $tipeKeanggotaanList = $stmt->fetchAll(PDO::FETCH_COLUMN);
         <!-- Tampilan Tabel -->
         <div id="tableView" style="display: block;">
             <?php if (!empty($filteredData)): ?>
-                <div class="table-responsive">
+                <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
                     <table class="table table-striped table-bordered">
                         <thead class="table-dark">
                             <tr>

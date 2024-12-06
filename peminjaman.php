@@ -66,23 +66,10 @@ sort($bulanList); // Urutkan bulan alfabetis
     
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    
-    <!-- Chart.js CDN -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
     <div class="container mt-5">
         <h1 class="text-center mb-4">Data Peminjaman</h1>
-
-        <!-- Dropdown untuk memilih tampilan -->
-        <div class="mb-4 text-center">
-            <label for="viewSelect" class="form-label">Tampilkan data sebagai:</label>
-            <select id="viewSelect" class="form-select w-auto d-inline-block">
-                <option value="table">Tabel</option>
-                <option value="chart">Grafik</option>
-            </select>
-        </div>
-
         <!-- Dropdown Filter Bulan -->
         <div class="mb-4 text-center">
             <form method="GET">
@@ -102,7 +89,7 @@ sort($bulanList); // Urutkan bulan alfabetis
         <!-- Tabel Data Peminjaman -->
         <div id="table-container" style="display: block;">
             <?php if (!empty($filteredData)): ?>
-                <div class="table-responsive">
+                <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
                     <table class="table table-striped table-bordered">
                         <thead class="table-dark">
                             <tr>
@@ -132,84 +119,12 @@ sort($bulanList); // Urutkan bulan alfabetis
                     </table>
                 </div>
             <?php else: ?>
-                <div class="alert alert-warning text-center">Tidak ada data yang ditemukan.</div>
+                <div class="alert alert-warning text-center">Tidak ada data peminjaman untuk bulan ini.</div>
             <?php endif; ?>
-        </div>
-
-        <!-- Grafik Data Peminjaman -->
-        <div id="chart-container" style="display: none;">
-            <?php
-            // Siapkan data untuk Chart.js
-            $labels = json_encode(array_keys($dataPerBulan));
-            $data = json_encode(array_values($dataPerBulan));
-            ?>
-            <div id="chartContainer" style="width: 80%; margin: 0 auto;">
-                <canvas id="peminjamanChart"></canvas>
-            </div>
-
-            <script type="text/javascript">
-                // Data untuk grafik
-                const peminjamanLabels = <?php echo $labels ?? '[]'; ?>;
-                const peminjamanData = <?php echo $data ?? '[]'; ?>;
-
-                // Inisialisasi grafik menggunakan Chart.js
-                const ctx = document.getElementById('peminjamanChart').getContext('2d');
-                const peminjamanChart = new Chart(ctx, {
-                    type: 'bar', // Grafik batang
-                    data: {
-                        labels: peminjamanLabels, // Label bulan
-                        datasets: [{
-                            label: 'Jumlah Peminjaman Berdasarkan Bulan',
-                            data: peminjamanData, // Data jumlah peminjaman
-                            backgroundColor: 'rgba(75, 192, 192, 0.2)', // Warna latar belakang batang
-                            borderColor: 'rgba(75, 192, 192, 1)', // Warna border batang
-                            borderWidth: 1
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        plugins: {
-                            legend: {
-                                position: 'top',
-                            },
-                            tooltip: {
-                                callbacks: {
-                                    label: function(tooltipItem) {
-                                        return tooltipItem.raw + ' Peminjaman';
-                                    }
-                                }
-                            }
-                        },
-                        scales: {
-                            y: {
-                                beginAtZero: true,
-                                title: {
-                                    display: true,
-                                    text: 'Jumlah Peminjaman'
-                                }
-                            }
-                        }
-                    }
-                });
-            </script>
         </div>
     </div>
 
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-
-    <script>
-        // Fungsi untuk mengubah tampilan antara tabel dan grafik
-        document.getElementById('viewSelect').addEventListener('change', function() {
-            const selectedView = this.value;
-            if (selectedView === 'table') {
-                document.getElementById('table-container').style.display = 'block';
-                document.getElementById('chart-container').style.display = 'none';
-            } else {
-                document.getElementById('table-container').style.display = 'none';
-                document.getElementById('chart-container').style.display = 'block';
-            }
-        });
-    </script>
 </body>
 </html>

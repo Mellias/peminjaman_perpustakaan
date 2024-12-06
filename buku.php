@@ -16,9 +16,15 @@ if ($conn->connect_error) {
 $klasifikasiList = []; // Untuk daftar klasifikasi
 $bukuData = []; // Untuk menyimpan data buku
 
-// Ambil data dari tabel buku
-$sql = "SELECT * FROM buku";
-$result = $conn->query($sql);
+// Ambil data dari tabel buku dengan kondisi pencarian dan klasifikasi
+$searchQuery = $_GET['search'] ?? ''; // Menangkap input pencarian
+
+$sql = "SELECT * FROM buku WHERE judul LIKE ?"; // Query pencarian berdasarkan judul buku
+$stmt = $conn->prepare($sql);
+$searchParam = "%" . $searchQuery . "%";
+$stmt->bind_param("s", $searchParam);
+$stmt->execute();
+$result = $stmt->get_result();
 
 if ($result->num_rows > 0) {
     // Ambil data dari query dan kumpulkan klasifikasi
@@ -64,6 +70,18 @@ include 'includes/navbar.php';
     <div class="container mt-5">
         <h1 class="text-center mb-4">KOLEKSI BUKU</h1>
 
+        <!-- Form Pencarian Buku -->
+        <form method="GET" class="mb-4">
+            <div class="row">
+                <div class="col-md-6 mx-auto">
+                    <div class="input-group">
+                        <input type="text" name="search" id="search" class="form-control" placeholder="Cari Buku..." value="<?php echo htmlspecialchars($searchQuery); ?>">
+                        <button type="submit" class="btn btn-primary">Cari</button>
+                    </div>
+                </div>
+            </div>
+        </form>
+
         <!-- Dropdown Filter -->
         <form method="GET" class="mb-4">
             <div class="row">
@@ -91,7 +109,7 @@ include 'includes/navbar.php';
 
         <!-- Tabel Koleksi Buku -->
         <?php if (!empty($bukuData)): ?>
-            <div class="table-responsive">
+            <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
                 <table class="table table-striped table-bordered">
                     <thead class="table-dark">
                         <tr>
