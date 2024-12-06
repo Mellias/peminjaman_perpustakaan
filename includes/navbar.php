@@ -8,6 +8,7 @@
     <a href="anggota.php" class="<?= basename($_SERVER['PHP_SELF']) == 'anggota.php' ? 'active' : '' ?>">Daftar Peminjam</a>
     <a href="peminjaman.php" class="<?= basename($_SERVER['PHP_SELF']) == 'peminjaman.php' ? 'active' : '' ?>">Data Peminjaman</a>
     <a href="add.php" class="<?= basename($_SERVER['PHP_SELF']) == 'add.php' ? 'active' : '' ?>">Pengelolaan Data Buku</a>
+    <a href="analisis.php" class="<?= basename($_SERVER['PHP_SELF']) == 'analisis.php' ? 'active' : '' ?>">Analisis</a>
 </div>
 </nav>
 
