@@ -19,10 +19,20 @@ $bukuData = []; // Untuk menyimpan data buku
 // Ambil data dari tabel buku dengan kondisi pencarian dan klasifikasi
 $searchQuery = $_GET['search'] ?? ''; // Menangkap input pencarian
 
-$sql = "SELECT * FROM buku WHERE judul LIKE ?"; // Query pencarian berdasarkan judul buku
+$sql = "SELECT * FROM buku";
+$params = [];
+
+if (!empty($searchQuery)) {
+    $sql .= " WHERE judul LIKE ?";
+    $params[] = "%" . $searchQuery . "%";
+}
+
 $stmt = $conn->prepare($sql);
-$searchParam = "%" . $searchQuery . "%";
-$stmt->bind_param("s", $searchParam);
+
+if (!empty($params)) {
+    $stmt->bind_param(str_repeat("s", count($params)), ...$params);
+}
+
 $stmt->execute();
 $result = $stmt->get_result();
 
@@ -33,7 +43,7 @@ if ($result->num_rows > 0) {
         $klasifikasiList[] = $row['nama_klasifikasi'];
     }
 } else {
-    echo "0 results";
+    echo "<div class='alert alert-warning text-center'>Tidak ada hasil ditemukan.</div>";
 }
 
 // Hapus duplikat dari daftar klasifikasi

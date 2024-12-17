@@ -6,8 +6,7 @@
     <a href="index.php" class="<?= basename($_SERVER['PHP_SELF']) == 'index.php' ? 'active' : '' ?>">Beranda</a>
     <a href="buku.php" class="<?= basename($_SERVER['PHP_SELF']) == 'buku.php' ? 'active' : '' ?>">Koleksi Buku</a>
     <a href="anggota.php" class="<?= basename($_SERVER['PHP_SELF']) == 'anggota.php' ? 'active' : '' ?>">Daftar Peminjam</a>
-    <a href="peminjaman.php" class="<?= basename($_SERVER['PHP_SELF']) == 'peminjaman.php' ? 'active' : '' ?>">Data Peminjaman</a>
-    <a href="add.php" class="<?= basename($_SERVER['PHP_SELF']) == 'add.php' ? 'active' : '' ?>">Pengelolaan Data Buku</a>
+    <a href="add.php" class="<?= basename($_SERVER['PHP_SELF']) == 'add.php' ? 'active' : '' ?>">Pengelolaan Data</a>
     <a href="analisis.php" class="<?= basename($_SERVER['PHP_SELF']) == 'analisis.php' ? 'active' : '' ?>">Analisis</a>
 </div>
 </nav>

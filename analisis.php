@@ -1,25 +1,54 @@
 <?php
-include 'includes/header.php'; // Menyertakan header
-include 'includes/navbar.php'; // Menyertakan navbar
+include 'includes/header.php';
+include 'includes/navbar.php';
 
 // Koneksi database
 $servername = "localhost";
-$username = "root";  // ganti dengan username database Anda
-$password = "";  // ganti dengan password database Anda
-$dbname = "perpustakaan";  // ganti dengan nama database Anda
+$username = "root";
+$password = "";
+$dbname = "perpustakaan";
 
 $conn = new mysqli($servername, $username, $password, $dbname);
-
-// Cek koneksi
 if ($conn->connect_error) {
     die("Connection failed: " . $conn->connect_error);
 }
 
-// Mengambil data peminjaman
-$sql = "SELECT id_anggota, DATEDIFF(tanggal_kembali, tanggal_pinjam) AS durasi_pinjam, COUNT(kode_buku) AS frekuensi_peminjaman 
-        FROM peminjaman
-        WHERE status_peminjaman = 'Telah Kembali'
-        GROUP BY id_anggota";
+// Mendapatkan bulan dari POST (atau default ke Januari jika tidak ada)
+$bulan = isset($_POST['bulan']) ? $_POST['bulan'] : 1;
+
+// Mengambil data peminjaman dan anggota berdasarkan bulan
+$sql = "SELECT p.id_anggota, a.Tipe_Keanggotaan, 
+            DATEDIFF(p.tanggal_kembali, p.tanggal_pinjam) AS durasi_pinjam,
+            COUNT(p.kode_buku) AS frekuensi_peminjaman
+            FROM peminjaman p
+            JOIN anggota a ON p.id_anggota = a.ID_Anggota
+            WHERE p.status_peminjaman = 'Telah Kembali'
+            AND MONTH(p.tanggal_pinjam) = $bulan
+            GROUP BY p.id_anggota";
+        
+// Menangani pemilihan bulan
+if ($bulan == 'semua') {
+    // Query untuk menampilkan data dari Januari hingga Juni (semua bulan)
+    $sql = "SELECT p.id_anggota, a.Tipe_Keanggotaan, 
+                DATEDIFF(p.tanggal_kembali, p.tanggal_pinjam) AS durasi_pinjam,
+                COUNT(p.kode_buku) AS frekuensi_peminjaman
+            FROM peminjaman p
+            JOIN anggota a ON p.id_anggota = a.ID_Anggota
+            WHERE p.status_peminjaman = 'Telah Kembali'
+            AND MONTH(p.tanggal_pinjam) BETWEEN 1 AND 6
+            GROUP BY p.id_anggota";
+} else {
+    // Query untuk bulan tertentu (Januari - Juni)
+    $sql = "SELECT p.id_anggota, a.Tipe_Keanggotaan, 
+                DATEDIFF(p.tanggal_kembali, p.tanggal_pinjam) AS durasi_pinjam,
+                COUNT(p.kode_buku) AS frekuensi_peminjaman
+            FROM peminjaman p
+            JOIN anggota a ON p.id_anggota = a.ID_Anggota
+            WHERE p.status_peminjaman = 'Telah Kembali'
+            AND MONTH(p.tanggal_pinjam) = $bulan
+            GROUP BY p.id_anggota";
+}
+
 $result = $conn->query($sql);
 
 $data = [];
@@ -28,38 +57,40 @@ if ($result->num_rows > 0) {
         $data[] = [
             'id_anggota' => $row['id_anggota'],
             'durasi_pinjam' => $row['durasi_pinjam'],
-            'frekuensi_peminjaman' => $row['frekuensi_peminjaman']
+            'frekuensi_peminjaman' => $row['frekuensi_peminjaman'],
+            'Tipe_Keanggotaan' => $row['Tipe_Keanggotaan']
         ];
     }
 } else {
     echo "0 results";
 }
 
-// Fungsi normalisasi data
-function normalize($data) {
-    $normalizedData = [];
+// Fungsi normalisasi data dengan Min-Max Scaling
+function minMaxNormalize($data) {
     $minDurasi = min(array_column($data, 'durasi_pinjam'));
     $maxDurasi = max(array_column($data, 'durasi_pinjam'));
+
     $minFrekuensi = min(array_column($data, 'frekuensi_peminjaman'));
     $maxFrekuensi = max(array_column($data, 'frekuensi_peminjaman'));
-    
+
+    $normalizedData = [];
     foreach ($data as $row) {
         $normalizedData[] = [
             'id_anggota' => $row['id_anggota'],
             'durasi_pinjam' => ($row['durasi_pinjam'] - $minDurasi) / ($maxDurasi - $minDurasi),
             'frekuensi_peminjaman' => ($row['frekuensi_peminjaman'] - $minFrekuensi) / ($maxFrekuensi - $minFrekuensi),
+            'Tipe_Keanggotaan' => $row['Tipe_Keanggotaan']
         ];
     }
     return $normalizedData;
 }
 
-$normalizedData = normalize($data);
+$normalizedData = minMaxNormalize($data);
 
-// Algoritma K-Means (sama dengan yang telah dibahas sebelumnya)
+// K-Means Algorithm
+// K-Means Algorithm
 function kMeans($data, $K) {
-    // Inisialisasi centroid secara acak
-    $centroids = array_slice($data, 0, $K);
-
+    $centroids = array_slice($data, 0, $K);  // Inisialisasi centroid dengan data pertama
     $iterations = 0;
     $maxIterations = 100;
     $clusters = [];
@@ -67,30 +98,41 @@ function kMeans($data, $K) {
     do {
         $iterations++;
         $newClusters = array_fill(0, $K, []);
-        
-        // Assign data points ke centroid terdekat
+
+        // Menyusun ulang data ke dalam cluster berdasarkan kedekatan dengan centroid
         foreach ($data as $point) {
             $distances = [];
             foreach ($centroids as $i => $centroid) {
-                $distances[$i] = sqrt(pow($point['durasi_pinjam'] - $centroid['durasi_pinjam'], 2) + pow($point['frekuensi_peminjaman'] - $centroid['frekuensi_peminjaman'], 2));
+                // Hitung jarak Euclidean
+                $distances[$i] = sqrt(pow($point['durasi_pinjam'] - $centroid['durasi_pinjam'], 2) + 
+                                      pow($point['frekuensi_peminjaman'] - $centroid['frekuensi_peminjaman'], 2));
             }
+            // Tentukan cluster terdekat
             $nearestCentroid = array_search(min($distances), $distances);
             $newClusters[$nearestCentroid][] = $point;
         }
 
-        // Recalculate centroid baru
+        // Menghitung centroid baru
         $newCentroids = [];
         foreach ($newClusters as $cluster) {
-            $newCentroids[] = [
-                'durasi_pinjam' => array_sum(array_column($cluster, 'durasi_pinjam')) / count($cluster),
-                'frekuensi_peminjaman' => array_sum(array_column($cluster, 'frekuensi_peminjaman')) / count($cluster),
-            ];
+            // Pastikan cluster tidak kosong sebelum menghitung centroid
+            if (count($cluster) > 0) {
+                $newCentroids[] = [
+                    'durasi_pinjam' => array_sum(array_column($cluster, 'durasi_pinjam')) / count($cluster),
+                    'frekuensi_peminjaman' => array_sum(array_column($cluster, 'frekuensi_peminjaman')) / count($cluster),
+                ];
+            } else {
+                // Jika cluster kosong, pilih centroid acak atau tetap gunakan centroid sebelumnya
+                $newCentroids[] = $centroids[array_rand($centroids)];
+            }
         }
 
+        // Jika centroid baru sama dengan centroid lama, berhenti
         if ($newCentroids == $centroids) {
             break;
         }
 
+        // Perbarui centroid dan cluster
         $centroids = $newCentroids;
         $clusters = $newClusters;
 
@@ -99,33 +141,41 @@ function kMeans($data, $K) {
     return $clusters;
 }
 
-// Menentukan jumlah cluster (misalnya 2)
-$K = 3;
+
+$K = 3; // Jumlah cluster yang diinginkan
 $clusters = kMeans($normalizedData, $K);
 
-// Menutup koneksi database
+// Menampilkan buku yang paling sering dipinjam
+$sql_buku = "SELECT kode_buku, judul, COUNT(*) AS jumlah_peminjaman
+             FROM peminjaman
+             GROUP BY kode_buku
+             ORDER BY jumlah_peminjaman DESC
+             LIMIT 5";
+$result_buku = $conn->query($sql_buku);
+
+$mostFrequentBooks = [];
+if ($result_buku->num_rows > 0) {
+    while ($row_buku = $result_buku->fetch_assoc()) {
+        $mostFrequentBooks[] = $row_buku;
+    }
+}
+
 $conn->close();
 
-// Fungsi untuk memberikan analisis berdasarkan clustering
-// Fungsi untuk memberikan analisis berdasarkan clustering dan mengganti nama cluster
+// Generate Analysis
 function generateAnalysis($clusters) {
     $analysis = [];
-
     foreach ($clusters as $index => $cluster) {
-        // Menghitung rata-rata durasi pinjam dan frekuensi peminjaman dalam cluster
         $avgDurasi = array_sum(array_column($cluster, 'durasi_pinjam')) / count($cluster);
         $avgFrekuensi = array_sum(array_column($cluster, 'frekuensi_peminjaman')) / count($cluster);
 
-        // Menentukan nilai durasi pinjam dalam cluster
         $durasiPinjam = array_column($cluster, 'durasi_pinjam');
-        sort($durasiPinjam);  // Urutkan nilai durasi pinjam dari yang terkecil hingga terbesar
+        sort($durasiPinjam);
 
-        // Menghitung persentil 33 dan 66 sebagai batas untuk kategori
         $count = count($durasiPinjam);
         $percentile33 = $durasiPinjam[floor($count * 0.33)];
         $percentile66 = $durasiPinjam[floor($count * 0.70)];
 
-        // Menentukan nama cluster berdasarkan persentil
         if ($avgDurasi > $percentile66) {
             $clusterName = "Cluster Peminjaman Lama";
         } elseif ($avgDurasi > $percentile33 && $avgDurasi <= $percentile66) {
@@ -134,21 +184,21 @@ function generateAnalysis($clusters) {
             $clusterName = "Cluster Peminjaman Cepat";
         }
 
-        // Menyusun analisis berdasarkan rata-rata durasi pinjam dan frekuensi peminjaman
+        $tipeKeanggotaan = array_column($cluster, 'Tipe_Keanggotaan');
+        $uniqueTipeKeanggotaan = array_unique($tipeKeanggotaan);
+
         $analysis[] = [
             'cluster' => $clusterName,
             'avgDurasi' => $avgDurasi,
             'avgFrekuensi' => $avgFrekuensi,
-            'description' => $clusterName . " memiliki rata-rata durasi pinjam " . round($avgDurasi, 2) . " hari, dengan frekuensi peminjaman rata-rata sebanyak " . round($avgFrekuensi, 2) . " buku."
+            'tipeKeanggotaan' => implode(', ', $uniqueTipeKeanggotaan),
+            'description' => $clusterName . " memiliki rata-rata durasi pinjam " . round($avgDurasi, 2) . " hari, dengan frekuensi peminjaman rata-rata sebanyak " . round($avgFrekuensi, 2) . " buku. Tipe keanggotaan: " . implode(', ', $uniqueTipeKeanggotaan)
         ];
     }
-
     return $analysis;
 }
 
-// Mengambil analisis dari hasil clustering
 $analysis = generateAnalysis($clusters);
-
 ?>
 
 <!DOCTYPE html>
@@ -157,133 +207,113 @@ $analysis = generateAnalysis($clusters);
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Analisis Clustering Peminjaman Buku</title>
-
-    <!-- Bootstrap 5 CDN -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-KyZXEJrT+K6+S3sjRpmzGKHY6gprpZIeGVg5A6xZfokJc9QhNmjDoOBmA4PLaXlt" crossorigin="anonymous">
-
-    <!-- Chart.js CDN -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
     <style>
         body {
             font-family: Arial, sans-serif;
             background-color: #f4f4f9;
         }
         header {
-            background-color: white;
-            color: black;
-            padding: 15px;
+            background-color: #ffffff;
+            color: #333;
+            padding: 20px;
             text-align: center;
+            font-size: 2em;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
         }
         .container {
-            margin: 20px auto;
+            margin-top: 30px;
         }
         .chart-container {
             position: relative;
             height: 800px;
-            width: 100%;
-            margin: 0 auto;
+            margin: 30px 0;
         }
         .analysis {
-            margin-top: 20px;
-            font-size: 1.1em;
+            margin-top: 30px;
         }
-        .analysis p {
-            margin-bottom: 10px;
+        .card {
+            margin-bottom: 20px;
         }
     </style>
 </head>
 <body>
+    <header>
+        Analisis Clustering Peminjaman Buku
+    </header>
+    
+    <div class="container">
+        <form method="POST" action="">
+            <div class="row">
+                <div class="col-md-3">
+                    <label for="bulan">Bulan</label>
+                    <select name="bulan" class="form-control">
+                        <option value="semua" <?= $bulan == 'semua' ? 'selected' : '' ?>>Semua Bulan</option>
+                        <option value="1" <?= $bulan == 1 ? 'selected' : '' ?>>Januari</option>
+                        <option value="2" <?= $bulan == 2 ? 'selected' : '' ?>>Februari</option>
+                        <option value="3" <?= $bulan == 3 ? 'selected' : '' ?>>Maret</option>
+                        <option value="4" <?= $bulan == 4 ? 'selected' : '' ?>>April</option>
+                        <option value="5" <?= $bulan == 5 ? 'selected' : '' ?>>Mei</option>
+                        <option value="6" <?= $bulan == 6 ? 'selected' : '' ?>>Juni</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-primary" style="margin-top: 28px;">Terapkan</button>
+                </div>
+            </div>
+        </form>
 
-<header>
-    <h1>Analisis K-Means Clustering Peminjaman Buku</h1>
-</header>
+        <div class="card">
+            <div class="card-header">Buku Paling Sering Dipinjam</div>
+            <div class="card-body">
+                <ul>
+                    <?php foreach ($mostFrequentBooks as $book): ?>
+                        <li><?= $book['judul'] ?> (<?= $book['jumlah_peminjaman'] ?> kali dipinjam)</li>
+                    <?php endforeach; ?>
+                </ul>
+            </div>
+        </div>
 
-<div class="container">
-    <div class="chart-container">
-        <canvas id="clusteringChart"></canvas>
+        <div class="card">
+            <div class="card-header">Analisis Clustering Peminjaman</div>
+            <div class="card-body">
+                <?php foreach ($analysis as $cluster): ?>
+                    <h5><?= $cluster['cluster'] ?></h5>
+                    <p><?= $cluster['description'] ?></p>
+                <?php endforeach; ?>
+            </div>
+        </div>
+
+        <div class="chart-container">
+            <canvas id="clusterChart"></canvas>
+        </div>
     </div>
 
-    <!-- Menampilkan analisis -->
-    <div class="analysis">
-        <?php
-        // Menampilkan analisis untuk setiap cluster
-        foreach ($analysis as $a) {
-            echo "<p><strong>" . $a['cluster'] . ":</strong> " . $a['description'] . "</p>";
-        }
-        ?>
-    </div>
-</div>
+    <script>
+            var ctx = document.getElementById('clusterChart').getContext('2d');
+            var clusterData = {
+                labels: <?php echo json_encode(array_column($analysis, 'cluster')); ?>,
+                datasets: [{
+                    label: 'Frekuensi Peminjaman',
+                    data: <?php echo json_encode(array_column($analysis, 'avgFrekuensi')); ?>,
+                    backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                    borderColor: 'rgba(54, 162, 235, 1)',
+                    borderWidth: 1
+                }]
+            };
 
-<!-- Bootstrap JS & Popper -->
-<script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.6/dist/umd/popper.min.js" integrity="sha384-oBqDVmMz4fnFO9gybP+YfFf7lD3pT4xJ6hg5V6o0x+QFlF4aZk3n6EwA3Er/7lg9x" crossorigin="anonymous"></script>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.min.js" integrity="sha384-cn7l7gDPX6ZKqG3I6g5j8rZjJfk6+dZaW8IN9KwyT+3VpAAe25+LR7xgFE2cmS4V" crossorigin="anonymous"></script>
-
-<script>
-    // Data untuk Chart.js
-    var clusters = <?php echo json_encode($clusters); ?>;
-    var clusterNames = <?php echo json_encode(array_column($analysis, 'cluster')); ?>; // Nama-nama cluster berdasarkan kriteria
-
-    var dataPoints = [];
-    var colors = ['#FF5733', '#33FF57', '#3357FF']; // Warna untuk masing-masing cluster
-    var datasets = [];
-
-    // Mengonversi data ke format yang bisa diproses oleh Chart.js
-    clusters.forEach(function(cluster, index) {
-        var clusterData = {
-            label: clusterNames[index], // Menggunakan nama cluster yang sesuai
-            data: [],
-            backgroundColor: colors[index],
-            borderColor: colors[index],
-            borderWidth: 1
-        };
-
-        cluster.forEach(function(member) {
-            clusterData.data.push({
-                x: member.durasi_pinjam,  // durasi_pinjam
-                y: member.frekuensi_peminjaman, // frekuensi_peminjaman
-            });
-        });
-
-        datasets.push(clusterData);
-    });
-
-    var ctx = document.getElementById('clusteringChart').getContext('2d');
-    var clusteringChart = new Chart(ctx, {
-        type: 'scatter',
-        data: {
-            datasets: datasets
-        },
-        options: {
-            responsive: true,
-            plugins: {
-                legend: {
-                    position: 'top', // Posisi legend di atas grafik
-                    labels: {
-                        font: {
-                            size: 14 // Ukuran font legend
+            var clusterChart = new Chart(ctx, {
+                type: 'bar',
+                data: clusterData,
+                options: {
+                    scales: {
+                        y: {
+                            beginAtZero: true
                         }
                     }
                 }
-            },
-            scales: {
-                x: {
-                    type: 'linear',
-                    position: 'bottom',
-                    title: {
-                        display: true,
-                        text: 'Durasi Pinjam (Hari)'  // Menambahkan keterangan sumbu X
-                    }
-                },
-                y: {
-                    title: {
-                        display: true,
-                        text: 'Frekuensi Peminjaman (Buku)'  // Menambahkan keterangan sumbu Y
-                    }
-                }
-            }
-        }
-    });
+            });
 </script>
 
 </body>

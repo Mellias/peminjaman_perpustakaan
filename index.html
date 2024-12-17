@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analisis Clustering Peminjaman Buku</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f9;
+        }
+        header {
+            background-color: #ffffff;
+            color: #333;
+            padding: 20px;
+            text-align: center;
+            font-size: 2em;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        .container {
+            margin-top: 30px;
+        }
+        .chart-container {
+            position: relative;
+            height: 800px;
+            margin: 30px 0;
+        }
+        .analysis {
+            margin-top: 30px;
+            font-size: 1.1em;
+        }
+        .card {
+            margin-bottom: 20px;
+        }
+        .analysis p {
+            margin-bottom: 10px;
+        }
+        .card-body {
+            font-size: 1.2em;
+        }
+        .cluster-label {
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>Analisis K-Means Clustering Peminjaman Buku</h1>
+</header>
+
+<div class="container">
+    <!-- Filter Bulan -->
+    <form method="POST">
+        <div class="mb-3">
+            <label for="bulan" class="form-label">Pilih Bulan</label>
+            <select class="form-select" id="bulan" name="bulan">
+                <option value="">Pilih Bulan</option>
+                <option value="1" <?php echo ($bulan_filter == '1' ? 'selected' : ''); ?>>Januari</option>
+                <option value="2" <?php echo ($bulan_filter == '2' ? 'selected' : ''); ?>>Februari</option>
+                <option value="3" <?php echo ($bulan_filter == '3' ? 'selected' : ''); ?>>Maret</option>
+                <option value="4" <?php echo ($bulan_filter == '4' ? 'selected' : ''); ?>>April</option>
+                <option value="5" <?php echo ($bulan_filter == '5' ? 'selected' : ''); ?>>Mei</option>
+                <option value="6" <?php echo ($bulan_filter == '6' ? 'selected' : ''); ?>>Juni</option>
+            </select>
+        </div>
+        <button type="submit" class="btn btn-primary">Filter</button>
+    </form>
+
+    <div class="chart-container">
+        <canvas id="myChart"></canvas>
+    </div>
+
+    <div class="analysis">
+        <?php foreach ($analysis as $cluster): ?>
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title"><?php echo $cluster['cluster']; ?></h5>
+                    <p class="card-text"><?php echo $cluster['description']; ?></p>
+                </div>
+            </div>
+        <?php endforeach; ?>
+    </div>
+</div>
+
+<script>
+    const data = <?php echo json_encode($clusters); ?>;
+    const labels = data.map(cluster => cluster.map(item => item.id_anggota).join(', '));
+
+    const ctx = document.getElementById('myChart').getContext('2d');
+    const chartData = {
+        labels: labels,
+        datasets: [{
+            label: 'Durasi Pinjam',
+            data: data.map(cluster => cluster.map(item => item.durasi_pinjam).reduce((a, b) => a + b, 0) / cluster.length),
+            backgroundColor: 'rgba(75, 192, 192, 0.2)',
+            borderColor: 'rgba(75, 192, 192, 1)',
+            borderWidth: 1
+        }]
+    };
+
+    const config = {
+        type: 'bar',
+        data: chartData,
+        options: {
+            responsive: true,
+            scales: {
+                x: { 
+                    beginAtZero: true 
+                },
+                y: { 
+                    beginAtZero: true 
+                }
+            }
+        }
+    };
+
+    const myChart = new Chart(ctx, config);
+</script>
+
+</body>
+</html>

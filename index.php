@@ -13,185 +13,138 @@ if ($conn->connect_error) {
     die("Connection failed: " . $conn->connect_error);
 }
 
-// Inisialisasi default
-$totalBukuDipinjam = 0;
-$totalBukuTidakDipinjam = 0;
-$peminjamanCount = [];
-$allBooks = [];
-$booksNeverBorrowed = [];
-$klasifikasiCounts = []; // Jumlah buku per klasifikasi
-
-// Ambil data peminjaman
-$sqlPeminjaman = "SELECT Judul, Kode_Buku FROM peminjaman";
-$resultPeminjaman = $conn->query($sqlPeminjaman);
-
-if ($resultPeminjaman->num_rows > 0) {
-    while ($row = $resultPeminjaman->fetch_assoc()) {
-        $key = normalizeString($row['Judul']) . '|' . normalizeString($row['Kode_Buku']);
-        $peminjamanCount[$key] = isset($peminjamanCount[$key]) ? $peminjamanCount[$key] + 1 : 1;
-    }
-    $totalBukuDipinjam = array_sum($peminjamanCount);
+// Fungsi untuk normalisasi string (untuk pencocokan data yang lebih tepat)
+function normalizeString($string) {
+    return mb_strtolower(trim(preg_replace('/\s+/', ' ', $string)));
 }
 
-// Ambil data buku
-$sqlBuku = "SELECT judul, nama_klasifikasi, kode_buku FROM buku";
-$resultBuku = $conn->query($sqlBuku);
+// Fungsi untuk normalisasi Z-Score
+function zScoreNormalization($data, $column) {
+    $values = array_column($data, $column);
+    
+    // Pastikan nilai-nilai dalam kolom adalah numerik
+    $values = array_map('floatval', $values); // Konversi semua nilai menjadi numerik
+    
+    $mean = array_sum($values) / count($values);
+    $variance = array_sum(array_map(function($x) use ($mean) { return pow($x - $mean, 2); }, $values)) / count($values);
+    $stddev = sqrt($variance);
 
-if ($resultBuku->num_rows > 0) {
-    while ($row = $resultBuku->fetch_assoc()) {
-        $key = normalizeString($row['judul']) . '|' . normalizeString($row['kode_buku']);
-        $allBooks[$key] = $row['nama_klasifikasi'];
-
-        // Hitung jumlah buku per klasifikasi
-        $klasifikasi = $row['nama_klasifikasi'];
-        $klasifikasiCounts[$klasifikasi] = isset($klasifikasiCounts[$klasifikasi]) ? $klasifikasiCounts[$klasifikasi] + 1 : 1;
+    foreach ($data as &$row) {
+        $row[$column] = ($row[$column] - $mean) / $stddev; // Z-Score Normalization
     }
-    $booksNeverBorrowed = array_diff(array_keys($allBooks), array_keys($peminjamanCount));
-    $totalBukuTidakDipinjam = count($booksNeverBorrowed);
+
+    return $data;
 }
 
-// Tangkap pilihan view untuk tabel/grafik
-$displayOption = isset($_GET['display']) ? $_GET['display'] : 'tabel';
+// Fungsi untuk One-Hot Encoding
+function oneHotEncode($data, $column) {
+    $uniqueValues = array_unique(array_column($data, $column));
+    foreach ($data as &$row) {
+        foreach ($uniqueValues as $value) {
+            $row[$column . "_" . $value] = ($row[$column] == $value) ? 1 : 0;
+        }
+    }
 
-// Sertakan header dan navbar
-include 'includes/header.php';
-include 'includes/navbar.php';
+    return $data;
+}
 
-// Tangkap pilihan dropdown
-$viewOption = isset($_GET['view']) ? $_GET['view'] : 'dipinjam';
+// Cek apakah form telah di-submit
+if (isset($_POST['submit']) && isset($_FILES['csv_file'])) {
+    // Pastikan file yang di-upload adalah CSV
+    if ($_FILES['csv_file']['type'] !== 'text/csv') {
+        echo 'Tolong unggah file CSV!';
+        exit;
+    }
+
+    // Baca file CSV
+    $fileTmpPath = $_FILES['csv_file']['tmp_name'];
+    $file = fopen($fileTmpPath, 'r');
+
+    $data = [];
+    
+    // Lewati header CSV
+    fgetcsv($file);
+
+    // Proses setiap baris dalam file CSV
+    while (($row = fgetcsv($file)) !== FALSE) {
+        // Ambil data dari CSV
+        $id_anggota = $row[0];          // ID Anggota
+        $tipe_keanggotaan = $row[1];    // Tipe Keanggotaan
+        $kode_eksemplar = $row[2];      // Kode Eksemplar
+        $judul = $row[3];               // Judul
+        $kode_klasifikasi = $row[4];    // Kode Klasifikasi
+        $nama_klasifikasi = $row[5];    // Nama Klasifikasi
+        $tanggal_pinjam = $row[6];      // Tanggal Pinjam
+        $tanggal_kembali = $row[7];     // Tanggal Kembali
+        $status_peminjaman = $row[8];   // Status Peminjaman
+        $bulan_peminjaman = $row[9];    // Bulan Peminjaman
+
+        // Menambahkan data ke array
+        $data[] = [
+            'id_anggota' => $id_anggota,
+            'tipe_keanggotaan' => $tipe_keanggotaan,
+            'kode_eksemplar' => $kode_eksemplar,
+            'judul' => $judul,
+            'kode_klasifikasi' => $kode_klasifikasi,
+            'nama_klasifikasi' => $nama_klasifikasi,
+            'tanggal_pinjam' => $tanggal_pinjam,
+            'tanggal_kembali' => $tanggal_kembali,
+            'status_peminjaman' => $status_peminjaman,
+            'bulan_peminjaman' => $bulan_peminjaman
+        ];
+    }
+
+    fclose($file);
+
+    // Lakukan normalisasi dan encoding
+    $data = zScoreNormalization($data, 'kode_klasifikasi'); // Normalisasi klasifikasi
+    $data = oneHotEncode($data, 'tipe_keanggotaan');       // One-Hot Encoding untuk tipe keanggotaan
+    $data = oneHotEncode($data, 'status_peminjaman');      // One-Hot Encoding untuk status peminjaman
+
+    // Simpan data peminjaman ke database setelah pengolahan
+    foreach ($data as $row) {
+        $insertSql = "INSERT INTO peminjaman (id_anggota, kode_buku, judul, kode_klasifikasi, nama_klasifikasi, tanggal_pinjam, tanggal_kembali, bulan_peminjaman, status_peminjaman) 
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        $insertStmt = $conn->prepare($insertSql);
+        $insertStmt->bind_param("sssssssss", $row['id_anggota'], $row['kode_eksemplar'], $row['judul'], $row['kode_klasifikasi'], $row['nama_klasifikasi'], $row['tanggal_pinjam'], $row['tanggal_kembali'], $row['bulan_peminjaman'], $row['status_peminjaman']);
+        $insertStmt->execute();
+    }
+    
+    echo '<script>alert("Data peminjaman berhasil dimasukkan!"); window.location.href = "index.php";</script>';
+}
 ?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Data Buku</title>
+    <title>Upload Data Peminjaman</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
+<?php include 'includes/header.php'; ?>
+<?php include 'includes/navbar.php'; ?>
+
 <div class="container mt-5">
-    <h1 class="text-center mb-4">Data Buku</h1>
+    <h1 class="text-center mb-4">Upload Data Peminjaman CSV</h1>
 
-    <div class="mb-4 text-center">
-        <form method="get" action="">
-            <select name="view" class="form-select w-auto d-inline" onchange="this.form.submit()">
-                <option value="dipinjam" <?php echo ($viewOption == 'dipinjam') ? 'selected' : ''; ?>>Buku yang Dipinjam</option>
-                <option value="tidak_dipinjam" <?php echo ($viewOption == 'tidak_dipinjam') ? 'selected' : ''; ?>>Buku yang Tidak Pernah Dipinjam</option>
-            </select>
-        </form>
-    </div>
-
-    <?php if ($viewOption == 'tidak_dipinjam'): ?>
-        <div class="alert alert-info text-center">
-            <strong>Total Buku yang Tidak Pernah Dipinjam:</strong> <?php echo $totalBukuTidakDipinjam; ?>
+    <form method="POST" enctype="multipart/form-data">
+        <div class="mb-3">
+            <label for="csv_file" class="form-label">Pilih File CSV</label>
+            <input type="file" class="form-control" name="csv_file" id="csv_file" required>
         </div>
-        <h2 class="text-center mb-4">Buku yang Tidak Pernah Dipinjam</h2>
-
-        <div class="mb-4 text-center">
-            <form method="get" action="">
-                <input type="hidden" name="view" value="tidak_dipinjam">
-                <select name="display" class="form-select w-auto d-inline" onchange="this.form.submit()">
-                    <option value="tabel" <?php echo ($displayOption == 'tabel') ? 'selected' : ''; ?>>Tabel</option>
-                    <option value="grafik" <?php echo ($displayOption == 'grafik') ? 'selected' : ''; ?>>Grafik</option>
-                </select>
-            </form>
-        </div>
-
-        <?php if ($displayOption == 'tabel'): ?>
-            <table class="table table-striped table-bordered">
-                <thead class="table-dark">
-                <tr>
-                    <th>No</th>
-                    <th>Judul Buku</th>
-                    <th>Nama Klasifikasi</th>
-                </tr>
-                </thead>
-                <tbody>
-                <?php $no = 1; ?>
-                <?php foreach ($booksNeverBorrowed as $key): ?>
-                    <?php list($judul, $kode) = explode('|', $key); ?>
-                    <?php $klasifikasi = $allBooks[$key] ?? 'Tidak Diketahui'; ?>
-                    <tr>
-                        <td><?php echo $no++; ?></td>
-                        <td><?php echo htmlspecialchars($judul); ?></td>
-                        <td><?php echo htmlspecialchars($klasifikasi); ?></td>
-                    </tr>
-                <?php endforeach; ?>
-                </tbody>
-            </table>
-        <?php else: ?>
-            <canvas id="klasifikasiChart" width="400" height="200"></canvas>
-            <script>
-                const data = {
-                    labels: <?php echo json_encode(array_keys($klasifikasiCounts)); ?>,
-                    datasets: [{
-                        label: 'Jumlah Buku Tidak Pernah Dipinjam',
-                        data: <?php echo json_encode(array_values($klasifikasiCounts)); ?>,
-                        backgroundColor: 'rgba(54, 162, 235, 0.6)',
-                        borderColor: 'rgba(54, 162, 235, 1)',
-                        borderWidth: 1
-                    }]
-                };
-
-                const config = {
-                    type: 'bar',
-                    data: data,
-                    options: {
-                        responsive: true,
-                        plugins: {
-                            legend: {
-                                position: 'top',
-                            },
-                        }
-                    }
-                };
-
-                new Chart(
-                    document.getElementById('klasifikasiChart'),
-                    config
-                );
-            </script>
-        <?php endif; ?>
-    <?php else: ?>
-        <div class="alert alert-info text-center">
-            <strong>Total Buku yang Dipinjam:</strong> <?php echo $totalBukuDipinjam; ?>
-        </div>
-        <h2 class="text-center mb-4">Buku yang Dipinjam</h2>
-        <table class="table table-striped table-bordered">
-            <thead class="table-dark">
-            <tr>
-                <th>No</th>
-                <th>Judul Buku</th>
-                <th>Jumlah Dipinjam</th>
-            </tr>
-            </thead>
-            <tbody>
-            <?php $no = 1; ?>
-            <?php foreach ($peminjamanCount as $key => $jumlah): ?>
-                <?php list($judul, $kode) = explode('|', $key); ?>
-                <tr>
-                    <td><?php echo $no++; ?></td>
-                    <td><?php echo htmlspecialchars($judul); ?></td>
-                    <td><?php echo $jumlah; ?></td>
-                </tr>
-            <?php endforeach; ?>
-            </tbody>
-        </table>
-    <?php endif; ?>
+        <button type="submit" class="btn btn-primary" name="submit">Upload</button>
+    </form>
 </div>
 
 <?php include 'includes/footer.php'; ?>
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
 
 <?php
-// Fungsi untuk normalisasi string
-function normalizeString($string) {
-    return strtolower(trim(preg_replace('/\s+/', ' ', $string)));
-}
-
 // Tutup koneksi
 $conn->close();
 ?>
