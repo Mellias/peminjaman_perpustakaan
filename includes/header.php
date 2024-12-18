@@ -11,29 +11,42 @@
             padding: 0;
         }
         nav {
-            background-color: #333;
+            background: linear-gradient(90deg, #3f51b5, #1a237e);
             color: white;
-            padding: 10px;
+            padding: 15px 20px;
             display: flex;
-            justify-content: flex-start;
+            justify-content: space-between;
             align-items: center;
-            padding-left: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .nav-brand {
+            font-size: 1.5rem;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .nav-links {
+            display: flex;
+            gap: 15px;
         }
         nav a {
             color: white;
-            margin: 0 10px;
             text-decoration: none;
             display: inline-block;
             padding: 8px 16px;
+            border-radius: 4px;
+            transition: background-color 0.3s, transform 0.2s;
         }
         nav a:hover {
-            text-decoration: underline;
-            background-color: #444;
+            background-color: rgba(255, 255, 255, 0.2);
+            transform: translateY(-2px);
         }
         nav a.active {
-            background-color: #e91e63; /* Warna khusus untuk halaman aktif */
+            background-color: #e91e63;
             color: white;
-            font-weight: bold; /* Penekanan pada halaman aktif */
+            font-weight: bold;
+            border: 1px solid #e91e63;
+            transform: translateY(0);
         }
         .container {
             padding: 20px;
@@ -55,4 +68,5 @@
         }
     </style>
 </head>
-<body>
+</body>
+</html>

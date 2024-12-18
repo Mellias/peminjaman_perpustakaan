@@ -62,11 +62,17 @@ if ($result->num_rows > 0) {
         ];
     }
 } else {
-    echo "0 results";
+    echo "<div class='alert alert-warning'>Data belum tersedia untuk bulan yang dipilih.</div>";
+    $data = [];
 }
 
 // Fungsi normalisasi data dengan Min-Max Scaling
 function minMaxNormalize($data) {
+    if (empty($data)) {
+        echo "<div class='alert alert-warning'>Tidak ada data yang dapat dinormalisasi.</div>";
+        return [];
+    }
+
     $minDurasi = min(array_column($data, 'durasi_pinjam'));
     $maxDurasi = max(array_column($data, 'durasi_pinjam'));
 
@@ -88,8 +94,12 @@ function minMaxNormalize($data) {
 $normalizedData = minMaxNormalize($data);
 
 // K-Means Algorithm
-// K-Means Algorithm
 function kMeans($data, $K) {
+    if (empty($data)) {
+        echo "<div class='alert alert-warning'>Tidak ada data untuk dilakukan clustering.</div>";
+        return [];
+    }
+
     $centroids = array_slice($data, 0, $K);  // Inisialisasi centroid dengan data pertama
     $iterations = 0;
     $maxIterations = 100;
@@ -141,7 +151,6 @@ function kMeans($data, $K) {
     return $clusters;
 }
 
-
 $K = 3; // Jumlah cluster yang diinginkan
 $clusters = kMeans($normalizedData, $K);
 
@@ -158,12 +167,19 @@ if ($result_buku->num_rows > 0) {
     while ($row_buku = $result_buku->fetch_assoc()) {
         $mostFrequentBooks[] = $row_buku;
     }
+} else {
+    echo "<div class='alert alert-warning'>Belum ada data buku yang dipinjam.</div>";
 }
 
 $conn->close();
 
 // Generate Analysis
 function generateAnalysis($clusters) {
+    if (empty($clusters)) {
+        echo "<div class='alert alert-warning'>Tidak ada data cluster untuk dianalisis.</div>";
+        return [];
+    }
+
     $analysis = [];
     foreach ($clusters as $index => $cluster) {
         $avgDurasi = array_sum(array_column($cluster, 'durasi_pinjam')) / count($cluster);
@@ -268,9 +284,13 @@ $analysis = generateAnalysis($clusters);
             <div class="card-header">Buku Paling Sering Dipinjam</div>
             <div class="card-body">
                 <ul>
-                    <?php foreach ($mostFrequentBooks as $book): ?>
-                        <li><?= $book['judul'] ?> (<?= $book['jumlah_peminjaman'] ?> kali dipinjam)</li>
-                    <?php endforeach; ?>
+                    <?php if (!empty($mostFrequentBooks)): ?>
+                        <?php foreach ($mostFrequentBooks as $book): ?>
+                            <li><?= $book['judul'] ?> (<?= $book['jumlah_peminjaman'] ?> kali dipinjam)</li>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <div class='alert alert-warning'>Belum ada data buku yang dipinjam.</div>
+                    <?php endif; ?>
                 </ul>
             </div>
         </div>
@@ -278,10 +298,14 @@ $analysis = generateAnalysis($clusters);
         <div class="card">
             <div class="card-header">Analisis Clustering Peminjaman</div>
             <div class="card-body">
-                <?php foreach ($analysis as $cluster): ?>
-                    <h5><?= $cluster['cluster'] ?></h5>
-                    <p><?= $cluster['description'] ?></p>
-                <?php endforeach; ?>
+                <?php if (!empty($analysis)): ?>
+                    <?php foreach ($analysis as $cluster): ?>
+                        <h5><?= $cluster['cluster'] ?></h5>
+                        <p><?= $cluster['description'] ?></p>
+                    <?php endforeach; ?>
+                <?php else: ?>
+                    <div class='alert alert-warning'>Tidak ada data clustering untuk ditampilkan.</div>
+                <?php endif; ?>
             </div>
         </div>
 
@@ -293,10 +317,10 @@ $analysis = generateAnalysis($clusters);
     <script>
             var ctx = document.getElementById('clusterChart').getContext('2d');
             var clusterData = {
-                labels: <?php echo json_encode(array_column($analysis, 'cluster')); ?>,
+                labels: <?php echo json_encode(!empty($analysis) ? array_column($analysis, 'cluster') : []); ?>,
                 datasets: [{
                     label: 'Frekuensi Peminjaman',
-                    data: <?php echo json_encode(array_column($analysis, 'avgFrekuensi')); ?>,
+                    data: <?php echo json_encode(!empty($analysis) ? array_column($analysis, 'avgFrekuensi') : []); ?>,
                     backgroundColor: 'rgba(54, 162, 235, 0.2)',
                     borderColor: 'rgba(54, 162, 235, 1)',
                     borderWidth: 1
@@ -314,7 +338,7 @@ $analysis = generateAnalysis($clusters);
                     }
                 }
             });
-</script>
+    </script>
 
 </body>
 </html>
